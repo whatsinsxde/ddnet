@@ -12,7 +12,6 @@
 
 #include <engine/config.h>
 #include <engine/console.h>
-#include <engine/discord.h>
 #include <engine/editor.h>
 #include <engine/engine.h>
 #include <engine/favorites.h>
@@ -430,14 +429,10 @@ void CClient::SetState(EClientState State)
 		CServerInfo CurrentServerInfo;
 		GetServerInfo(&CurrentServerInfo);
 
-		Discord()->SetGameInfo(CurrentServerInfo, m_aCurrentMap, Registered);
+	
 		Steam()->SetGameInfo(ServerAddress(), m_aCurrentMap, Registered);
 	}
-	else if(OldState == IClient::STATE_ONLINE)
-	{
-		Discord()->ClearGameInfo();
-		Steam()->ClearGameInfo();
-	}
+	
 }
 
 // called when the map is loaded and we should init for a new round
@@ -1392,7 +1387,7 @@ void CClient::ProcessServerInfo(int RawType, NETADDR *pFrom, const void *pData, 
 			{
 				m_CurrentServerInfo = Info;
 				m_CurrentServerInfoRequestTime = -1;
-				Discord()->UpdateServerInfo(Info, m_aCurrentMap);
+			
 			}
 
 			bool ValidPong = false;
@@ -2951,7 +2946,7 @@ void CClient::Update()
 	else
 		GameClient()->OnUpdate();
 
-	Discord()->Update();
+
 	Steam()->Update();
 	if(Steam()->GetConnectAddress())
 	{
@@ -2999,7 +2994,7 @@ void CClient::InitInterfaces()
 #if defined(CONF_AUTOUPDATE)
 	m_pUpdater = Kernel()->RequestInterface<IUpdater>();
 #endif
-	m_pDiscord = Kernel()->RequestInterface<IDiscord>();
+	
 	m_pSteam = Kernel()->RequestInterface<ISteam>();
 	m_pNotifications = Kernel()->RequestInterface<INotifications>();
 	m_pStorage = Kernel()->RequestInterface<IStorage>();
@@ -4708,9 +4703,6 @@ int main(int argc, const char **argv)
 #if defined(CONF_DEBUG)
 			" + debug"
 #endif
-#if defined(CONF_DISCORD)
-			" + discord"
-#endif
 #if defined(CONF_VIDEORECORDER)
 			" + videorecorder"
 #endif
@@ -4812,8 +4804,7 @@ int main(int argc, const char **argv)
 	pKernel->RegisterInterface(pEngineMap); // IEngineMap
 	pKernel->RegisterInterface(static_cast<IMap *>(pEngineMap), false);
 
-	IDiscord *pDiscord = CreateDiscord();
-	pKernel->RegisterInterface(pDiscord);
+	
 
 	ISteam *pSteam = CreateSteam();
 	pKernel->RegisterInterface(pSteam);
