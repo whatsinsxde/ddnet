@@ -113,8 +113,6 @@ option(SERVER "Compile server" ON)
 option(TOOLS "Compile tools" ON)
 option(DOWNLOAD_GTEST "Download and compile GTest" ${AUTO_DEPENDENCIES_DEFAULT})
 option(STEAM "Build the Steam release version" OFF)
-option(DISCORD "Enable Discord rich presence support" OFF)
-option(DISCORD_DYNAMIC "Enable discovering Discord rich presence libraries at runtime (Linux only)" OFF)
 option(PREFER_BUNDLED_LIBS "Prefer bundled libraries over system libraries" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DEV "Don't generate stuff necessary for packaging" OFF)
 option(VULKAN "Enable the vulkan backend" ${AUTO_VULKAN_BACKEND})
@@ -527,9 +525,6 @@ find_package(Python3)
 find_package(Rust)
 find_package(SDL2)
 find_package(SQLite3)
-if(DISCORD)
-  find_package(DiscordSdk)
-endif()
 if(UNIX)
   # Use -pthread instead of -lpthread to draw dependencies other than libpthread
   set(THREADS_PREFER_PTHREAD_FLAG TRUE)
@@ -621,9 +616,6 @@ show_dependency_status("SDL2" SDL2)
 show_dependency_status("SQLite3" SQLite3)
 show_dependency_status("Wavpack" WAVPACK)
 show_dependency_status("Zlib" ZLIB)
-if(DISCORD)
-  show_dependency_status("DiscordSdk" DiscordSdk)
-endif()
 if(WEBSOCKETS)
   show_dependency_status("Websockets" WEBSOCKETS)
 endif()
@@ -655,17 +647,6 @@ endif()
 
 if(UPNP AND NOT(MINIUPNPC_FOUND))
   message(SEND_ERROR "You must install miniupnpc to compile the ${CMAKE_PROJECT_NAME} server with UPnP support")
-endif()
-if(DISCORD AND NOT(DISCORDSDK_FOUND))
-  message(SEND_ERROR "You must install the Discord SDK to compile the ${CMAKE_PROJECT_NAME} client with Discord support")
-endif()
-if(DISCORD_DYNAMIC)
-  if(TARGET_OS STREQUAL "windows" OR TARGET_OS STREQUAL "mac")
-    message(SEND_ERROR "Dynamically loading the Discord SDK is only supported on Linux")
-  endif()
-  if(NOT DISCORD)
-    message(SEND_ERROR "You must enable the DISCORD flag if you want to link the Discord SDK")
-  endif()
 endif()
 if(NOT(PNG_FOUND))
   message(SEND_ERROR "You must install libpng to compile ${CMAKE_PROJECT_NAME}")
@@ -1877,7 +1858,6 @@ set(COPY_FILES
   ${SQLite3_COPY_FILES}
   ${FFMPEG_COPY_FILES}
   ${WEBSOCKETS_COPY_FILES}
-  ${DISCORDSDK_COPY_FILES}
   ${VULKAN_COPY_FILES}
   ${CRASHDUMP_COPY_FILES}
   ${SSP_COPY_FILES}
@@ -2028,7 +2008,6 @@ set_src(ENGINE_INTERFACE GLOB src/engine
   config.h
   console.h
   demo.h
-  discord.h
   editor.h
   engine.h
   favorites.h
@@ -2228,13 +2207,6 @@ add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_S
 add_library(game-shared EXCLUDE_FROM_ALL OBJECT ${GAME_SHARED} ${GAME_GENERATED_SHARED})
 list(APPEND TARGETS_OWN engine-gfx engine-shared game-shared)
 
-if(DISCORD AND NOT DISCORD_DYNAMIC)
-  add_library(discord-shared SHARED IMPORTED)
-  set_target_properties(discord-shared PROPERTIES
-    IMPORTED_LOCATION "${DISCORDSDK_LIBRARIES}"
-    IMPORTED_IMPLIB "${DISCORDSDK_LIBRARIES}"
-  )
-endif()
 
 ########################################################################
 # CLIENT
@@ -2288,7 +2260,6 @@ if(CLIENT)
     client.h
     demoedit.cpp
     demoedit.h
-    discord.cpp
     enums.h
     favorites.cpp
     friends.cpp
@@ -2597,13 +2568,6 @@ if(CLIENT)
     ${LIBS}
   )
 
-  if(DISCORD)
-    if(NOT DISCORD_DYNAMIC)
-      list(APPEND LIBS_CLIENT discord-shared)
-    else()
-      list(APPEND LIBS_CLIENT ${CMAKE_DL_LIBS})
-    endif()
-  endif()
 
   if(TARGET_OS STREQUAL "windows")
     set(VERSION_EXECUTABLE "${CLIENT_EXECUTABLE}")
@@ -2669,7 +2633,6 @@ if(CLIENT)
     ${SDL2_INCLUDE_DIRS}
     ${WAVPACK_INCLUDE_DIRS}
     ${FFMPEG_INCLUDE_DIRS}
-    ${DISCORDSDK_INCLUDE_DIRS}
 
     ${VULKAN_INCLUDE_DIRS}
 
@@ -3419,7 +3382,6 @@ if(CLIENT AND DMGBUILD)
     COMMAND ${CMAKE_COMMAND} -E copy bundle/client/Info.plist ${PROJECT_SOURCE_DIR}/other/bundle/client/PkgInfo ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:game-client> ${TARGET_TOOLS_FILES} ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/MacOS/
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/ddnet-libs/sdl/${LIB_DIR}/SDL2.framework ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/Frameworks/SDL2.framework
-    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/discord/${LIB_DIR}/discord_game_sdk.dylib ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/Frameworks/
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/freetype/${LIB_DIR}/libfreetype.6.dylib ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/Frameworks/
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/png/${LIB_DIR}/libpng16.16.dylib ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/Frameworks/
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/ffmpeg/${LIB_DIR}/libavcodec.61.dylib ${DMG_TMPDIR}/${CLIENT_EXECUTABLE}.app/Contents/Frameworks/
@@ -3679,12 +3641,6 @@ foreach(target ${TARGETS_OWN})
   endif()
   if(STEAM)
     target_compile_definitions(${target} PRIVATE PLATFORM_SUFFIX=-steam)
-  endif()
-  if(DISCORD)
-    target_compile_definitions(${target} PRIVATE CONF_DISCORD)
-    if(DISCORD_DYNAMIC)
-      target_compile_definitions(${target} PRIVATE CONF_DISCORD_DYNAMIC)
-    endif()
   endif()
   if(VERSION)
     target_compile_definitions(${target} PRIVATE GAME_RELEASE_VERSION_INTERNAL=${VERSION})
